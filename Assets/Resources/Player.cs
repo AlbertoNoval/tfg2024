@@ -1,6 +1,10 @@
 using Photon.Pun;
+using System.Collections;
+using System.Collections.Generic;
 using TMPro;
+using Unity.Burst.CompilerServices;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.UI;
 
 public class Player : MonoBehaviour
@@ -10,25 +14,41 @@ public class Player : MonoBehaviour
     public bool esMiTurno = false;
     public PhotonView view;
     public static int cont=0;
-    public GameObject canvasTUrno,canvasJugadorStats;
+    public GameObject canvasTUrno,canvasJugadorStats,canvasAtacar;
     GameManager gameManager;
-    Casilla miCasilla;
+    private bool teHasMovido = false;
+    private bool hasAtacado = false;
+    public Node miCasilla;
     public int id;
+    /**/
     public string objetoVacioName;
     public string objetoDesconocidoName;
     public RawImage consumibleRawImage;
     public RawImage armaRawImage;
     private string nombre = "Player";
     public TMP_Text nombreTxt;
-    private int daÒoAtaque = 10;
-    public TMP_Text daÒoAtaqueTxt;
+    private int da√±oAtaque = 10;
+    public TMP_Text da√±oAtaqueTxt;
     private int vida;
     public int vidaMax = 100;
-    
+    private ShortestPath shortestPath;
 
     public TMP_Text healthText;
 
-
+    public void setTeHasMovido(bool teHasMovido)
+    {
+        if (view.IsMine)
+        {
+            this.teHasMovido = teHasMovido;
+        }
+    }
+    public void setHasAtacado(bool hasAtacado)
+    {
+        if (view.IsMine)
+        {
+            this.hasAtacado = hasAtacado;
+        }
+    }
     public Texture getConsumibleSprite()
     {
         return consumibleRawImage.texture;
@@ -72,14 +92,14 @@ public class Player : MonoBehaviour
         UpdatePlayerProperties(consumibleRawImage.texture.name, armaRawImage.texture.name);
     }
     
-    public int getDaÒoAtaque()
+    public int getDa√±oAtaque()
     {
-        return daÒoAtaque;
+        return da√±oAtaque;
     }
-    public void setDaÒoAtaque(int daÒoAtaque)
+    public void setDa√±oAtaque(int da√±oAtaque)
     {
-        this.daÒoAtaque = daÒoAtaque;
-        this.daÒoAtaqueTxt.text = "DaÒo: " + daÒoAtaque;
+        this.da√±oAtaque = da√±oAtaque;
+        this.da√±oAtaqueTxt.text = "Da√±o: " + da√±oAtaque;
         UpdatePlayerProperties(consumibleRawImage.texture.name,armaRawImage.texture.name);
     }
 
@@ -88,11 +108,11 @@ public class Player : MonoBehaviour
     private void UpdatePlayerProperties(string recursoConsumible,string recursoArma)
     {
         view.RPC("SyncPlayerProperties", RpcTarget.AllBuffered,
-        recursoConsumible, recursoArma, nombre, vida, daÒoAtaque); 
+        recursoConsumible, recursoArma, nombre, vida, da√±oAtaque); 
     }
 
     [PunRPC]
-    private void SyncPlayerProperties(string consumibleSpriteName, string armaSpriteName, string nombre, int vida, int daÒoAtaque)
+    private void SyncPlayerProperties(string consumibleSpriteName, string armaSpriteName, string nombre, int vida, int da√±oAtaque)
     {
         Sprite consumibleTexture = Resources.Load<Sprite>(consumibleSpriteName);
         Sprite armaTexture = Resources.Load<Sprite>(armaSpriteName);
@@ -104,8 +124,8 @@ public class Player : MonoBehaviour
         this.nombreTxt.text = this.nombre + id;
         this.vida = vida;
         this.healthText.text = "Vida: " + this.vida;
-        this.daÒoAtaque = daÒoAtaque;
-        this.daÒoAtaqueTxt.text = "DaÒo: " + this.daÒoAtaque;
+        this.da√±oAtaque = da√±oAtaque;
+        this.da√±oAtaqueTxt.text = "Da√±o: " + this.da√±oAtaque;
     }
 
     
@@ -113,21 +133,59 @@ public class Player : MonoBehaviour
 
 
 
-
+    public float rangoMovimiento = 3;
+    private List<GameObject> reachableCells = new List<GameObject>();
     /// <summary>
     /// Metodo que visualiza....
     /// </summary>
     public void visualizarCasillasPosibles()
     {
+        if (view.IsMine)
+        {
+            GameObject[] allCells = GameObject.FindGameObjectsWithTag("casilla");
+            reachableCells.Clear();
+            foreach (GameObject cell in allCells)
+            {
+                cell.GetComponent<Renderer>().material.color = Color.black;
+            }
+            foreach (GameObject cell in allCells)
+            {
+                Renderer renderer = cell.GetComponent<Renderer>();
+                if (Vector3.Distance(transform.position, cell.transform.position) <= rangoMovimiento)
+                {
+                    // Resalta visualmente la casilla alcanzable cambiando su material
 
+                    if (renderer != null)
+                    {
+                        Material originalMaterial = renderer.material;
+                        renderer.material.color = Color.red;
+                        reachableCells.Add(cell);
+                    }
+
+                }
+            }
+        }
+        
     }
-    public void seleccionarCasilla(Casilla casilla)
+    public void desvisualizarCasillasPosibles()
+    {
+        GameObject[] allCells = GameObject.FindGameObjectsWithTag("casilla");
+        reachableCells.Clear();
+        foreach (GameObject cell in allCells)
+        {
+            cell.GetComponent<Renderer>().material.color = Color.black;
+        }
+    }
+    
+    public void seleccionarCasilla(Node casilla)
     {
         miCasilla = casilla;
     }
 
+    NavMeshAgent agent;
     private void Awake()
     {
+        shortestPath = FindObjectOfType<ShortestPath>();
         view = GetComponent<PhotonView>();
         gameManager = FindObjectOfType<GameManager>();
         id = cont;
@@ -139,7 +197,7 @@ public class Player : MonoBehaviour
     {
         //playerList = getListOtherPlayer();
     }
-    public void usarObjeto(Consumible consumible)
+    public void usarObjeto(Almacenable consumible)
     {
         consumible.interactuar(this);
     }
@@ -165,7 +223,7 @@ public class Player : MonoBehaviour
         // Desactivar los controles del jugador muerto
         // ...
 
-        // Notificar a los dem·s jugadores que el jugador ha muerto
+        // Notificar a los dem√°s jugadores que el jugador ha muerto
         view.RPC("PlayerDied", RpcTarget.AllBuffered, view.Owner.ActorNumber);
 
         // Eliminar al jugador muerto de la partida
@@ -178,10 +236,47 @@ public class Player : MonoBehaviour
     [PunRPC]
     private void PlayerDied(int actorNumber)
     {
-        // AquÌ puedes realizar acciones visuales para indicar que el jugador con el actorNumber dado ha muerto
-        // Por ejemplo, eliminar su personaje de la escena o cambiar su apariencia para indicar que est· muerto
+        // Aqu√≠ puedes realizar acciones visuales para indicar que el jugador con el actorNumber dado ha muerto
+        // Por ejemplo, eliminar su personaje de la escena o cambiar su apariencia para indicar que est√° muerto
         
     }
+
+    private IEnumerator corrutinaCaminoMasCorto(HashSet<Transform> lista)
+    {
+        print("Mi casilla: " + miCasilla.name);
+        setTeHasMovido(true);
+        foreach (Transform t in lista)
+        {
+            GameObject objeto = t.gameObject;
+            Renderer renderer = objeto.GetComponent<Renderer>();
+            renderer.material.color = Color.yellow;
+
+            // Mover al jugador a la posici√≥n de la casilla actual
+            Vector3 targetPosition = objeto.transform.position;
+            float moveSpeed = 10f; // Velocidad de movimiento del jugador
+
+            print("Objeto: " + objeto.name);
+            while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
+            {
+                transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+                yield return null;
+            }
+
+            // Esperar un corto tiempo entre cada movimiento
+            yield return new WaitForSeconds(0.0f);
+        }
+        GameObject[] casillas = GameObject.FindGameObjectsWithTag("casilla");
+        for(int i = 0; i < casillas.Length; i++)
+        {
+            if (Vector3.Distance(casillas[i].transform.position,transform.position) < 0.1)
+            {
+                miCasilla = casillas[i].GetComponent<Node>();
+            }
+        }
+        desvisualizarCasillasPosibles();
+
+    }
+    public HashSet<Transform> caminoMasCorto = new HashSet<Transform>();
     // Update is called once per frame
     void Update()
     {
@@ -192,14 +287,22 @@ public class Player : MonoBehaviour
             
             if(esMiTurno)
             {
+                if(teHasMovido == false)
+                {
+                    visualizarCasillasPosibles();
+                }
                 canvasTUrno.SetActive(true);
                 if (Input.GetMouseButtonDown(0))
                 {
                     GameObject detectado = getRaycastGameobjectFromTag("casilla");
                     if (detectado != null)
                     {
-                        Vector3 posicionDestino = detectado.transform.position;
-                        transform.position = posicionDestino;
+                        if(reachableCells.Contains(detectado) && teHasMovido == false)
+                        {
+                            caminoMasCorto = shortestPath.findShortestPath(miCasilla.transform, detectado.transform);
+                            caminoMasCorto.Add(detectado.transform);
+                            StartCoroutine(corrutinaCaminoMasCorto(caminoMasCorto));
+                        }
                     }
                 }
             }
@@ -219,9 +322,9 @@ public class Player : MonoBehaviour
                     {
                         playerScript.canvasJugadorStats.SetActive(true);
                         int randomVida = Random.Range(1, 100);
-                        int randomDaÒo = Random.Range(1, 100);
+                        int randomDa√±o = Random.Range(1, 100);
                         playerScript.setVida(randomVida);
-                        playerScript.setDaÒoAtaque(randomDaÒo);
+                        playerScript.setDa√±oAtaque(randomDa√±o);
                         playerScript.setConsumibleSprite(objetoDesconocidoName);
                         playerScript.setArmaSprite(objetoDesconocidoName);
                         playerScript.setNombre("Player" + id);
@@ -248,14 +351,21 @@ public class Player : MonoBehaviour
     public GameObject getRaycastGameobjectFromTag(string tag)
     {
         Ray rayo = Camera.main.ScreenPointToRay(Input.mousePosition);
+
         RaycastHit hit;
         GameObject objeto = null;
         // Si el rayo golpea un collider con el tag "casilla"
-        if (Physics.Raycast(rayo, out hit) && hit.collider.CompareTag(tag))
+        if (Physics.Raycast(rayo, out hit,Mathf.Infinity) && hit.collider.CompareTag(tag))
         {
             objeto = hit.collider.gameObject;
         }
         return objeto;
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.black;
+        Gizmos.DrawWireSphere(transform.position, rangoMovimiento);
     }
 
 }

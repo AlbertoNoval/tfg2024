@@ -20,7 +20,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         print("OJo");
         print(PhotonNetwork.CurrentRoom.MaxPlayers);
-        while (PhotonNetwork.CurrentRoom.PlayerCount < 2)
+        while (PhotonNetwork.CurrentRoom.PlayerCount < PhotonNetwork.CurrentRoom.MaxPlayers)
         {
             yield return null; // Espera hasta que todos los jugadores estén en la sala
         }
@@ -80,6 +80,9 @@ public class GameManager : MonoBehaviourPunCallbacks
 
             Player jugadorTurnoPlayer = jugadorTurnoObject.GetComponent<Player>();
             jugadorTurnoPlayer.esMiTurno= isMyTurn;
+            jugadorTurnoPlayer.setTeHasMovido(!isMyTurn);
+            //jugadorTurnoPlayer.visualizarCasillasPosibles();
+
             //jugadorTurnoPlayer.playerList = jugadorTurnoPlayer.getListOtherPlayer();
             // Aquí puedes realizar las acciones necesarias según el turno del jugador local
         }

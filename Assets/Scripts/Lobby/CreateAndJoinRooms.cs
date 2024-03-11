@@ -10,11 +10,16 @@ public class CreateAndJoinRooms : MonoBehaviourPunCallbacks
 {
     public TMP_InputField createInput;
     public TMP_InputField joinInput;
+    int maxPlayer = 1;
+    public void setPlayerAmount(int amount)
+    {
+        maxPlayer= amount;
+    }
 
     public void createRoom()
     {
         RoomOptions roomOptions = new RoomOptions();
-        roomOptions.MaxPlayers = 4;
+        roomOptions.MaxPlayers = maxPlayer;
         PhotonNetwork.CreateRoom(createInput.text, roomOptions);
     }
     public void JoinRoom()

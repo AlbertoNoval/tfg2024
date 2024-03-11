@@ -6,6 +6,7 @@ using UnityEngine;
 public abstract class Casilla : MonoBehaviour
 {
     public string codigo;
+    public bool seleccionada = false;
     PhotonView view;
     void Start()
     {
@@ -20,10 +21,11 @@ public abstract class Casilla : MonoBehaviour
     }
     private void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Player"))
+        
+        if (other.CompareTag("Player") && seleccionada)
         {
             Player player = other.GetComponent<Player>();
-            interactuar(player);
+            player.pisarCasilla(this);
         }
     }
 }

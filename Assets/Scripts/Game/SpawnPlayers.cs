@@ -27,10 +27,14 @@ public class SpawnPlayers : MonoBehaviour
     void Start()
     {
         Transform random = randomCasilla();
-        Vector3 randomPosition = new Vector3(random.position.x, 1, random.position.z);
-        GameObject player = PhotonNetwork.Instantiate(playerPrefab.name, randomPosition, Quaternion.identity);
-        PhotonNetwork.LocalPlayer.TagObject = player;
-        players.Add(player.GetComponent<Player>());
+        Vector3 randomPosition = new Vector3(random.position.x, 1.5f, random.position.z);
+        GameObject playerObject = PhotonNetwork.Instantiate(playerPrefab.name, randomPosition, Quaternion.identity);
+        Player player = playerObject.GetComponent<Player>();
+        player.miCasilla = random.GetComponent<Node>();
+        Canvas canvas = player.canvasAtacar.GetComponent<Canvas>();
+        canvas.worldCamera = Camera.main;
+        PhotonNetwork.LocalPlayer.TagObject = playerObject;
+        players.Add(playerObject.GetComponent<Player>());
     }
 
     // Update is called once per frame
